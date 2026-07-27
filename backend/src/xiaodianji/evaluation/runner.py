@@ -17,7 +17,7 @@ from xiaodianji.schemas.evaluation import ConfirmationRates, EvaluationMetrics, 
 from xiaodianji.schemas.record import record_draft_adapter
 
 
-DEFAULT_CASES_PATH = Path(__file__).resolve().parents[4] / "evaluation" / "cases.jsonl"
+DEFAULT_CASES_PATH = Path(__file__).with_name("cases.jsonl")
 
 
 class EvaluationRunner:
