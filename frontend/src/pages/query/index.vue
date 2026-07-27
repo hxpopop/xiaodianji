@@ -63,6 +63,7 @@ function openEvidence(evidenceId: string) {
         :aria-disabled="!question.trim() || loading"
         @click="submit()"
         @keydown.enter="submit()"
+        @keydown.space.prevent="submit()"
       >
         开始查询
       </div>
@@ -70,14 +71,19 @@ function openEvidence(evidenceId: string) {
 
     <section class="examples" aria-labelledby="examples-heading">
       <h2 id="examples-heading">六类示例问题</h2>
-      <button
+      <div
         v-for="example in examples"
         :key="example"
-        type="button"
+        class="example-action"
+        role="button"
+        tabindex="0"
+        :aria-disabled="loading"
         @click="submit(example)"
+        @keydown.enter="submit(example)"
+        @keydown.space.prevent="submit(example)"
       >
         {{ example }}
-      </button>
+      </div>
     </section>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -161,15 +167,22 @@ textarea {
   font-size: 1rem;
 }
 
-.examples button {
+.example-action {
+  display: flex;
+  align-items: center;
   min-height: 2.75rem;
-  padding: 0;
-  border: 0;
   border-bottom: 1px solid $line;
-  border-radius: 0;
-  background: $surface;
   color: $primary;
-  text-align: left;
+}
+
+.example-action[aria-disabled='true'] {
+  color: $muted;
+}
+
+.submit-action:focus-visible,
+.example-action:focus-visible {
+  outline: 3px solid #8cc3ff;
+  outline-offset: 2px;
 }
 
 .error {
