@@ -1,0 +1,64 @@
+from uuid import uuid4
+
+from httpx import ASGITransport, AsyncClient
+
+from xiaodianji.main import create_app
+from xiaodianji.providers.base import ProviderUnavailable
+from xiaodianji.records.extraction import RecordWorkflow
+
+
+class FailingExtractionProvider:
+    async def extract(self, text: str):
+        raise ProviderUnavailable("provider is unavailable")
+
+
+class FailingASRProvider:
+    async def transcribe(self, audio: bytes, mime_type: str):
+        raise ProviderUnavailable("ASR is unavailable")
+
+
+class NeverCreatesConfirmation:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def create(self, *args, **kwargs):
+        self.calls += 1
+        raise AssertionError("provider failure must not create a confirmation")
+
+
+class RetainedEvidenceService:
+    def __init__(self) -> None:
+        self.created = 0
+
+    async def create_upload(self, **kwargs):
+        self.created += 1
+        return type("Evidence", (), {"id": uuid4(), "mime_type": kwargs["mime_type"]})()
+
+    async def attach_transcript(self, *args, **kwargs):
+        raise AssertionError("a failed ASR call must not attach a transcript")
+
+
+async def test_provider_failure_returns_manual_fallback_without_record() -> None:
+    creator = NeverCreatesConfirmation()
+    app = create_app(record_workflow=RecordWorkflow(confirmation_workflow=creator, extraction_provider=FailingExtractionProvider(), asr_provider=FailingASRProvider()))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/records/text", headers={"X-Shop-Id": str(uuid4()), "Idempotency-Key": "text-fail-001"}, json={"text": "王老板拿了一批插座"})
+
+    assert response.status_code == 503
+    assert response.json()["fallback"] == "manual_form"
+    assert creator.calls == 0
+
+
+async def test_asr_failure_returns_manual_fallback_and_keeps_uploaded_evidence() -> None:
+    creator = NeverCreatesConfirmation()
+    evidence_service = RetainedEvidenceService()
+    app = create_app(record_workflow=RecordWorkflow(confirmation_workflow=creator, extraction_provider=FailingExtractionProvider(), asr_provider=FailingASRProvider(), evidence_service=evidence_service))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/records/voice", headers={"X-Shop-Id": str(uuid4()), "Idempotency-Key": "voice-fail-001"}, files={"file": ("trade.wav", b"RIFF\x04\x00\x00\x00WAVEdata", "audio/wav")})
+
+    assert response.status_code == 503
+    assert response.json()["fallback"] == "manual_form"
+    assert evidence_service.created == 1
+    assert creator.calls == 0
