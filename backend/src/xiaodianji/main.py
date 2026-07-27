@@ -4,13 +4,21 @@ from fastapi import FastAPI
 
 from xiaodianji.api.confirmations import router as confirmations_router
 from xiaodianji.api.customers import router as customers_router
+from xiaodianji.api.evidences import router as evidences_router
 from xiaodianji.api.ledger import router as ledger_router
 from xiaodianji.api.records import router as records_router
+from xiaodianji.config import Settings
 from xiaodianji.customers.repository import SQLAlchemyCustomerRepository
 from xiaodianji.customers.service import CustomerService
 from xiaodianji.db import async_session_factory
+from xiaodianji.evidences.service import EvidenceService
+from xiaodianji.evidences.storage import Boto3ObjectStorage
 from xiaodianji.ledger.reader import ledger_reader_from
 from xiaodianji.ledger.workflow import SQLAlchemyLedgerWorkflow
+from xiaodianji.middleware import RequestBodyLimitMiddleware
+
+
+DEFAULT_MAX_REQUEST_BODY_BYTES = 21 * 1024 * 1024
 
 
 def create_app(
@@ -19,20 +27,38 @@ def create_app(
     manual_record_service: Any | None = None,
     confirmation_service: Any | None = None,
     ledger_service: Any | None = None,
+    evidence_service: Any | None = None,
+    max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
 ) -> FastAPI:
     workflow = SQLAlchemyLedgerWorkflow(async_session_factory)
     ledger_backend = ledger_service or workflow
+    if evidence_service is None:
+        settings = Settings()
+        storage = Boto3ObjectStorage(
+            endpoint_url=settings.object_storage_endpoint,
+            access_key=settings.object_storage_access_key,
+            secret_key=settings.object_storage_secret_key,
+            bucket=settings.object_storage_bucket,
+        )
+        evidence_service = EvidenceService(async_session_factory, storage)
+
     app = FastAPI(title="小店记 API", version="0.1.0")
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_body_size=max_request_body_bytes,
+    )
     app.state.customer_service = customer_service or CustomerService(
         SQLAlchemyCustomerRepository(async_session_factory)
     )
     app.state.manual_record_service = manual_record_service or workflow
     app.state.confirmation_service = confirmation_service or workflow
     app.state.ledger_service = ledger_reader_from(ledger_backend)
+    app.state.evidence_service = evidence_service
     app.include_router(customers_router)
     app.include_router(records_router)
     app.include_router(confirmations_router)
     app.include_router(ledger_router)
+    app.include_router(evidences_router)
 
     @app.get("/api/v1/health")
     async def health() -> dict[str, str]:
