@@ -12,6 +12,7 @@ import LineItemEditor from './LineItemEditor.vue'
 
 type ItemRecordDraft = QuoteDraft | TransactionDraft
 type EvidenceState = 'loading' | 'ready' | 'missing' | 'unavailable'
+type ImageEvidenceOpen = { type: 'image'; url: string }
 type LineItemConfidenceField = 'product' | 'spec' | 'quantity' | 'unit' | 'unit_price' | 'subtotal'
 
 const props = withDefaults(defineProps<{
@@ -27,6 +28,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'confirm', payload: { draft: RecordDraft; edited: boolean }): void
   (event: 'cancel'): void
+  (event: 'open-evidence', payload: ImageEvidenceOpen): void
 }>()
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
@@ -98,6 +100,13 @@ const evidenceActionLabel = computed(() => {
   if (props.evidence?.type === 'image') return '查看原始图片'
   return '查看原始文本'
 })
+
+function openImageEvidence() {
+  const currentEvidence = props.evidence
+  if (currentEvidence?.type !== 'image' || !currentEvidence.access_url) return
+  emit('open-evidence', { type: 'image', url: currentEvidence.access_url })
+}
+
 
 function confidenceBelow(path: string) {
   const raw = props.confirmation.field_confidences[path]
@@ -283,14 +292,15 @@ function submit() {
           <span>{{ evidenceActionLabel }}</span>
           <audio :src="evidence.access_url" controls />
         </div>
-        <navigator
-          v-else-if="evidence.access_url"
+        <button
+          v-else-if="evidence.access_url && evidence.type === 'image'"
           class="evidence-action"
+          type="button"
           data-action="open-evidence"
-          :url="evidence.access_url"
+          @click="openImageEvidence"
         >
           {{ evidenceActionLabel }}
-        </navigator>
+        </button>
         <p v-else class="evidence-unavailable">原始文件暂时不可播放或查看。</p>
       </div>
       <p v-else>原始凭证暂时无法查看，请稍后重试。</p>
@@ -441,8 +451,13 @@ h2 {
   display: inline-flex;
   align-items: center;
   min-height: $control-height;
+  justify-content: center;
   margin-top: $space-1;
+  padding: 0 $space-2;
   color: $primary;
+  border: 0;
+  background: transparent;
+  appearance: none;
   font-weight: 700;
 }
 

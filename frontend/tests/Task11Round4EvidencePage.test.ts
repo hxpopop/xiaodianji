@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const confirmation = {
@@ -68,6 +68,10 @@ describe('Task 11 round 4 evidence loading', () => {
     })
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('loads typed evidence with the current shop and evidence id', async () => {
     const wrapper = mount(ConfirmationPage)
     await flushPromises()
@@ -75,5 +79,29 @@ describe('Task 11 round 4 evidence loading', () => {
     expect(mocks.getEvidence).toHaveBeenCalledWith('shop-evidence', 'evidence-typed')
     expect(wrapper.text()).toContain('原始语音.m4a')
     expect(wrapper.text()).toContain('王老板拿了两台角磨机')
+  })
+
+  it('previews image evidence when the card requests it', async () => {
+    const previewImage = vi.fn()
+    vi.stubGlobal('uni', { previewImage })
+    mocks.getEvidence.mockResolvedValueOnce({
+      id: 'evidence-typed',
+      type: 'image',
+      status: 'ready',
+      original_filename: '送货单.jpg',
+      mime_type: 'image/jpeg',
+      size_bytes: 4096,
+      asr_text: null,
+      access_url: 'https://objects.example/evidence-typed',
+    })
+    const wrapper = mount(ConfirmationPage)
+    await flushPromises()
+
+    await wrapper.get('[data-action="open-evidence"]').trigger('click')
+
+    expect(previewImage).toHaveBeenCalledWith({
+      current: 'https://objects.example/evidence-typed',
+      urls: ['https://objects.example/evidence-typed'],
+    })
   })
 })

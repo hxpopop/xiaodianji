@@ -170,6 +170,32 @@ describe('Task 11 round 4 confirmation behavior', () => {
     expect(wrapper.text()).not.toContain('凭证编号：evidence-1')
   })
 
+  it('emits an image URL from a labeled button instead of using a navigator', async () => {
+    const evidence = {
+      id: 'evidence-image',
+      type: 'image',
+      status: 'ready',
+      original_filename: '送货单.jpg',
+      mime_type: 'image/jpeg',
+      size_bytes: 4096,
+      asr_text: null,
+      access_url: 'https://objects.example/evidence-image',
+    }
+    const wrapper = mount(ConfirmationCard, {
+      props: { confirmation, evidence, evidenceState: 'ready' } as any,
+    })
+
+    const action = wrapper.get('[data-action="open-evidence"]')
+    expect(action.element.tagName).toBe('BUTTON')
+    expect(action.text()).toContain('查看原始图片')
+    expect(wrapper.find('navigator[data-action="open-evidence"]').exists()).toBe(false)
+
+    await action.trigger('click')
+    expect(wrapper.emitted('open-evidence')).toEqual([[
+      { type: 'image', url: 'https://objects.example/evidence-image' },
+    ]])
+  })
+
   it.each([
     ['loading', '正在加载原始凭证…'],
     ['missing', '本次没有关联原始凭证。'],

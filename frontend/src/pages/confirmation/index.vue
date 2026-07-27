@@ -6,6 +6,7 @@ import ConfirmationCard from '../../components/ConfirmationCard.vue'
 import { recordStore } from '../../stores/record'
 
 type EvidenceState = 'loading' | 'ready' | 'missing' | 'unavailable'
+type ImageEvidenceOpen = { type: 'image'; url: string }
 
 const threshold = Number(import.meta.env.VITE_CONFIDENCE_THRESHOLD || .75)
 const evidence = ref<EvidenceRead | null>(null)
@@ -38,6 +39,13 @@ watch(
   { immediate: true },
 )
 
+
+function openEvidence(payload: ImageEvidenceOpen) {
+  uni.previewImage({
+    current: payload.url,
+    urls: [payload.url],
+  })
+}
 async function confirm(payload: { draft: RecordDraft; edited: boolean }) {
   try {
     await recordStore.resolveDraft(payload.draft, payload.edited)
@@ -66,6 +74,7 @@ async function cancel() {
       :evidence="evidence"
       :evidence-state="evidenceState"
       @confirm="confirm"
+      @open-evidence="openEvidence"
       @cancel="cancel"
     />
     <section v-else class="empty">
