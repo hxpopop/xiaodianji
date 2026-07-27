@@ -7,7 +7,8 @@
     "build:h5": "uni build",
     "build:mp-weixin": "uni build -p mp-weixin",
     "test": "vitest run --config vitest.config.ts",
-    "type-check": "vue-tsc --noEmit -p tsconfig.json"
+    "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5020220260725001",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020220260725001",
+    "@playwright/test": "^1.55.1",
     "@types/node": "^20.17.0",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.1.0",
