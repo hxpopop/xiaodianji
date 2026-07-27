@@ -24,10 +24,11 @@ def get_evaluation_runner(request: Request) -> EvaluationActions:
 @router.post("/run", response_model=EvaluationRunRead, status_code=status.HTTP_201_CREATED)
 async def run_evaluation(
     request: Request,
-    payload: EvaluationRunRequest,
+    payload: EvaluationRunRequest | None = None,
     x_shop_id: UUID = Header(alias="X-Shop-Id"),
 ) -> EvaluationRunRead:
-    return await get_evaluation_runner(request).run(x_shop_id, payload.model_name)
+    model_name = payload.model_name if payload is not None else "configured"
+    return await get_evaluation_runner(request).run(x_shop_id, model_name)
 
 
 @router.get("/{run_id}", response_model=EvaluationRunRead)
