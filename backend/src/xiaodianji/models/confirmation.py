@@ -64,6 +64,7 @@ class PendingConfirmation(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         index=True,
     )
     idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    resolution_idempotency_key: Mapped[str | None] = mapped_column(String(120))
     schema_version: Mapped[str] = mapped_column(String(32), default="1", nullable=False)
     model_name: Mapped[str | None] = mapped_column(String(120))
     formal_record_type: Mapped[str | None] = mapped_column(String(32))
