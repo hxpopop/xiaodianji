@@ -1,10 +1,11 @@
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta
+from collections.abc import Callable
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from xiaodianji.ledger.balance import BalanceService
@@ -22,20 +23,28 @@ class ReminderService:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         overdue_days: int = 30,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         if overdue_days <= 0:
             raise ValueError("overdue_days must be positive")
         self.session_factory = session_factory
         self.overdue_days = overdue_days
         self.balance_service = BalanceService(session_factory)
+        self.now = now or (lambda: datetime.now(timezone.utc))
 
     async def refresh(self, shop_id: UUID, as_of: date) -> ReminderSummary:
-        timezone_name = await self._shop_timezone(shop_id)
-        due_transactions = await self._overdue_transactions(shop_id, as_of, timezone_name)
-        candidate_customer_ids = set(due_transactions)
         active_items: list[ReminderItem] = []
-
         async with self.session_factory.begin() as session:
+            await session.execute(
+                select(func.pg_advisory_xact_lock(self._advisory_lock_key(shop_id)))
+            )
+            timezone_name = await self._shop_timezone(shop_id)
+            due_transactions = await self._overdue_transactions(
+                shop_id,
+                as_of,
+                timezone_name,
+            )
+            candidate_customer_ids = set(due_transactions)
             reminders = list(
                 (
                     await session.scalars(
@@ -99,9 +108,14 @@ class ReminderService:
 
         return self._summary(active_items)
 
+    async def local_today(self, shop_id: UUID) -> date:
+        timezone_name = await self._shop_timezone(shop_id)
+        return self.now().astimezone(self._zone(timezone_name)).date()
+
     async def list_open(self, shop_id: UUID) -> ReminderSummary:
         timezone_name = await self._shop_timezone(shop_id)
-        as_of = datetime.now(self._zone(timezone_name)).date()
+        zone = self._zone(timezone_name)
+        as_of = self.now().astimezone(zone).date()
         async with self.session_factory() as session:
             rows = (
                 await session.execute(
@@ -125,7 +139,7 @@ class ReminderService:
             self._item(
                 customer_id=reminder.customer_id,
                 customer_name=customer_name,
-                due_at=reminder.due_at,
+                due_at=reminder.due_at.astimezone(zone),
                 balance=Decimal(reminder.payload["balance"]),
                 overdue_transaction_count=int(reminder.payload["overdue_transaction_count"]),
                 as_of=as_of,
@@ -172,6 +186,10 @@ class ReminderService:
             if as_of > due_date:
                 grouped[transaction.customer_id].append((due_date, customer_name))
         return grouped
+
+    @staticmethod
+    def _advisory_lock_key(shop_id: UUID) -> int:
+        return int.from_bytes(shop_id.bytes[:8], byteorder="big", signed=True)
 
     @staticmethod
     def _zone(timezone_name: str) -> ZoneInfo:

@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,14 @@ class ReminderStatus(StrEnum):
 
 class Reminder(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "reminders"
+    __table_args__ = (
+        UniqueConstraint(
+            "shop_id",
+            "customer_id",
+            "type",
+            name="uq_reminder_shop_customer_type",
+        ),
+    )
 
     shop_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -56,4 +64,3 @@ class Anomaly(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         index=True,
     )
     payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-
