@@ -31,4 +31,3 @@ def test_unsupported_question_does_not_infer_sql_or_an_amount() -> None:
 
     assert parsed.intent is None
     assert parsed.customer_name is None
-
