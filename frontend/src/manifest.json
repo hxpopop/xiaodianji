@@ -1,0 +1,9 @@
+{
+  "name": "小店记",
+  "appid": "__UNI__XIAODIANJI",
+  "description": "传统小店的确认式记账工具",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "h5": { "title": "小店记" },
+  "mp-weixin": { "appid": "" }
+}

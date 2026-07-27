@@ -2,26 +2,28 @@
   "name": "xiaodianji-frontend",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "scripts": {
+    "dev:h5": "uni",
+    "build:h5": "uni build",
+    "build:mp-weixin": "uni build -p mp-weixin",
     "test": "vitest run --config vitest.config.ts",
-    "type-check": "vue-tsc --noEmit -p tsconfig.json",
-    "build:h5": "vite build"
+    "type-check": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@dcloudio/uni-app": "3.0.0-alpha-3000020210521001",
-    "vue": "^3.5.18"
+    "@dcloudio/uni-app": "3.0.0-alpha-5020220260725001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5020220260725001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5020220260725001",
+    "vue": "3.4.21"
   },
   "devDependencies": {
-    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-3000020210521001",
-    "@types/node": "^16.11.7",
-    "@vitejs/plugin-vue": "^6.0.0",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020220260725001",
+    "@types/node": "^20.17.0",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.1.0",
-    "sass": "^1.45.0",
+    "sass": "^1.89.2",
     "typescript": "^5.8.3",
-    "vite": "^6.4.3",
-    "vitest": "^3.2.4",
+    "vite": "5.2.8",
+    "vitest": "^1.6.1",
     "vue-tsc": "^2.2.12"
   }
 }
