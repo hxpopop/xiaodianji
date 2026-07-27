@@ -27,6 +27,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("shop_id", sa.Uuid(), nullable=False),
         sa.Column("idempotency_key", sa.String(length=120), nullable=False),
+        sa.Column("owner_token", sa.Uuid(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["shop_id"], ["shops.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("shop_id", "idempotency_key", name="uq_record_reservation_shop_idempotency"),

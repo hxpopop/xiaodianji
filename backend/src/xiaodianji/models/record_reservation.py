@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from xiaodianji.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -12,3 +13,5 @@ class RecordCreationReservation(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     shop_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
     idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    owner_token: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

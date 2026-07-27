@@ -1,10 +1,12 @@
 import asyncio
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 
 from xiaodianji.confirmations.service import ConfirmationRecord
 from xiaodianji.customers.service import CustomerService
@@ -51,23 +53,46 @@ class RecordWorkflow:
 
     async def _run_reserved(self, shop_id: UUID, idempotency_key: str, create_candidate) -> ConfirmationRecord:
         factory = self.confirmation_workflow.session_factory
+        owner_token = uuid4()
         for _ in range(3000):
             async with factory() as session:
                 existing = await session.scalar(select(PendingConfirmation).where(PendingConfirmation.shop_id == shop_id, PendingConfirmation.idempotency_key == idempotency_key))
             if existing is not None:
                 return self.confirmation_workflow._to_record(existing)
-            try:
-                async with factory.begin() as session:
-                    session.add(RecordCreationReservation(shop_id=shop_id, idempotency_key=idempotency_key))
-                    await session.flush()
-            except Exception:
+            reservation = (
+                insert(RecordCreationReservation)
+                .values(
+                    shop_id=shop_id,
+                    idempotency_key=idempotency_key,
+                    owner_token=owner_token,
+                    expires_at=func.now() + timedelta(minutes=5),
+                )
+                .on_conflict_do_update(
+                    constraint="uq_record_reservation_shop_idempotency",
+                    set_={
+                        "owner_token": owner_token,
+                        "expires_at": func.now() + timedelta(minutes=5),
+                    },
+                    where=RecordCreationReservation.expires_at <= func.now(),
+                )
+                .returning(RecordCreationReservation.owner_token)
+            )
+            async with factory.begin() as session:
+                acquired_owner = await session.scalar(reservation)
+            if acquired_owner is None:
                 await asyncio.sleep(0.01)
                 continue
             try:
                 return await create_candidate()
             finally:
                 async with factory.begin() as session:
-                    await session.execute(delete(RecordCreationReservation).where(RecordCreationReservation.shop_id == shop_id, RecordCreationReservation.idempotency_key == idempotency_key))
+                    await session.execute(
+                        delete(RecordCreationReservation).where(
+                            RecordCreationReservation.shop_id == shop_id,
+                            RecordCreationReservation.idempotency_key == idempotency_key,
+                            RecordCreationReservation.owner_token == owner_token,
+                        )
+                    )
         raise RuntimeError("record creation is still in progress")
 
     async def _with_customer_match(self, shop_id: UUID, draft: RecordDraft) -> RecordDraft:
