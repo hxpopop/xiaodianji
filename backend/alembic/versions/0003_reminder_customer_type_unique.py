@@ -44,6 +44,7 @@ def upgrade() -> None:
                                 id DESC
                         ) AS duplicate_rank
                     FROM reminders
+                    WHERE customer_id IS NOT NULL
                 )
                 DELETE FROM reminders AS reminder
                 USING ranked_reminders AS ranked
