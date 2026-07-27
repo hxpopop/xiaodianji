@@ -5,7 +5,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from xiaodianji.confirmations.service import ConfirmationRecord
@@ -22,9 +22,22 @@ class CandidateConfirmationWorkflow(Protocol):
 
 
 class RecordWorkflow:
-    def __init__(self, *, confirmation_workflow: CandidateConfirmationWorkflow, extraction_provider: ExtractionProvider, asr_provider: ASRProvider, evidence_service: EvidenceService | None = None, customer_service: CustomerService | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        confirmation_workflow: CandidateConfirmationWorkflow,
+        extraction_provider: ExtractionProvider,
+        asr_provider: ASRProvider,
+        evidence_service: EvidenceService | None = None,
+        customer_service: CustomerService | None = None,
+        reservation_lease: timedelta = timedelta(minutes=5),
+    ) -> None:
+        if reservation_lease <= timedelta(0):
+            raise ValueError("reservation lease must be positive")
         self.confirmation_workflow, self.extraction_provider, self.asr_provider = confirmation_workflow, extraction_provider, asr_provider
         self.evidence_service, self.customer_service = evidence_service, customer_service
+        self.reservation_lease = reservation_lease
+        self.reservation_renew_interval = reservation_lease.total_seconds() / 3
 
     async def from_text(self, shop_id: UUID, text: str, idempotency_key: str, *, source_evidence_id: UUID | None = None) -> ConfirmationRecord:
         try:
@@ -65,13 +78,13 @@ class RecordWorkflow:
                     shop_id=shop_id,
                     idempotency_key=idempotency_key,
                     owner_token=owner_token,
-                    expires_at=func.now() + timedelta(minutes=5),
+                    expires_at=func.now() + self.reservation_lease,
                 )
                 .on_conflict_do_update(
                     constraint="uq_record_reservation_shop_idempotency",
                     set_={
                         "owner_token": owner_token,
-                        "expires_at": func.now() + timedelta(minutes=5),
+                        "expires_at": func.now() + self.reservation_lease,
                     },
                     where=RecordCreationReservation.expires_at <= func.now(),
                 )
@@ -83,7 +96,12 @@ class RecordWorkflow:
                 await asyncio.sleep(0.01)
                 continue
             try:
-                return await create_candidate()
+                return await self._run_candidate_with_renewal(
+                    shop_id,
+                    idempotency_key,
+                    owner_token,
+                    create_candidate,
+                )
             finally:
                 async with factory.begin() as session:
                     await session.execute(
@@ -94,6 +112,59 @@ class RecordWorkflow:
                         )
                     )
         raise RuntimeError("record creation is still in progress")
+
+    async def _run_candidate_with_renewal(
+        self,
+        shop_id: UUID,
+        idempotency_key: str,
+        owner_token: UUID,
+        create_candidate,
+    ) -> ConfirmationRecord:
+        candidate_task = asyncio.create_task(create_candidate())
+        renewal_task = asyncio.create_task(
+            self._renew_reservation(shop_id, idempotency_key, owner_token)
+        )
+        tasks = (candidate_task, renewal_task)
+        try:
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            if renewal_task in done:
+                candidate_task.cancel()
+                await asyncio.gather(candidate_task, return_exceptions=True)
+                await renewal_task
+                raise ProviderUnavailable("record creation reservation renewal stopped")
+            renewal_task.cancel()
+            await asyncio.gather(renewal_task, return_exceptions=True)
+            return await candidate_task
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _renew_reservation(
+        self,
+        shop_id: UUID,
+        idempotency_key: str,
+        owner_token: UUID,
+    ) -> None:
+        factory = self.confirmation_workflow.session_factory
+        while True:
+            await asyncio.sleep(self.reservation_renew_interval)
+            renewal = (
+                update(RecordCreationReservation)
+                .where(
+                    RecordCreationReservation.shop_id == shop_id,
+                    RecordCreationReservation.idempotency_key == idempotency_key,
+                    RecordCreationReservation.owner_token == owner_token,
+                    RecordCreationReservation.expires_at > func.now(),
+                )
+                .values(expires_at=func.now() + self.reservation_lease)
+                .returning(RecordCreationReservation.owner_token)
+            )
+            async with factory.begin() as session:
+                renewed_owner = await session.scalar(renewal)
+            if renewed_owner != owner_token:
+                raise ProviderUnavailable("record creation reservation ownership was lost")
 
     async def _with_customer_match(self, shop_id: UUID, draft: RecordDraft) -> RecordDraft:
         if self.customer_service is None or not hasattr(draft, "items"): return draft
