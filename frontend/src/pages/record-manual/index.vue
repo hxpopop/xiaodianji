@@ -1,0 +1,10 @@
+<script setup lang="ts">
+import { reactive, ref } from 'vue'
+import { recordStore } from '../../stores/record'
+const now = new Date().toISOString()
+const form = reactive({ customer_name: '', product: '', quantity: 1, unit: '件', unit_price: 0, payment_status: 'unpaid' as const })
+const error = ref('')
+async function submit() { error.value = ''; const subtotal = Number((form.quantity * form.unit_price).toFixed(2)); try { await recordStore.createManualDraft({ target_type:'transaction', customer_name:form.customer_name, occurred_at:now, payment_status:form.payment_status, items:[{ product:form.product, quantity:Number(form.quantity), unit:form.unit, unit_price:Number(form.unit_price), subtotal }], total_amount:subtotal }); uni.navigateTo({ url:'/pages/confirmation/index' }) } catch (reason) { error.value = reason instanceof Error ? reason.message : '暂时不能提交，请稍后重试。' } }
+</script>
+<template><main class="page"><h1>手动输入</h1><label>客户<input v-model="form.customer_name" /></label><label>商品<input v-model="form.product" /></label><label>数量<input v-model.number="form.quantity" type="number" min="0.001" step="0.001" /></label><label>单位<input v-model="form.unit" /></label><label>单价（元）<input v-model.number="form.unit_price" type="number" min="0" step="0.01" /></label><label>付款状态<select v-model="form.payment_status"><option value="unpaid">赊账未收</option><option value="paid">已收款</option></select></label><p v-if="error" class="error">{{ error }}</p><button :disabled="!form.customer_name || !form.product || recordStore.state.saving" @click="submit">生成确认单</button></main></template>
+<style scoped lang="scss">@use '../../styles/tokens.scss' as *;.page{max-width:42rem;margin:auto;padding:$space-4 $space-3;display:grid;gap:$space-2;}h1{margin:0 0:$space-2;}label{display:grid;gap:.25rem;font-weight:700;}input,select{min-height:2.75rem;border:1px solid $line;border-radius:$radius-small;padding:0 .75rem;background:#fff;}button{border:0;background:$primary;color:#fff;font-weight:700;margin-top:$space-2;}.error{color:$danger;margin:0;}</style>

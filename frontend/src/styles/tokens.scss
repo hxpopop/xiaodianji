@@ -1,0 +1,39 @@
+$body-text: 1.0625rem;
+$amount-text: 1.75rem;
+$control-text: 1.0625rem;
+$control-height: 3rem;
+$space-1: .5rem;
+$space-2: .75rem;
+$space-3: 1rem;
+$space-4: 1.5rem;
+$space-5: 2rem;
+$ink: #111318;
+$muted: #5e6470;
+$line: #d9dde5;
+$primary: #0a66d9;
+$primary-pressed: #0757b9;
+$amber: #9a5a00;
+$amber-bg: #fff6e4;
+$success: #16713d;
+$danger: #a32b24;
+$surface: #ffffff;
+$radius-small: .75rem;
+$radius-medium: 1rem;
+$radius-large: 1.25rem;
+$motion-fast: 120ms;
+$motion-standard: 220ms;
+
+:root {
+  color: $ink;
+  background: $surface;
+  font: 100%/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-optical-sizing: auto;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: $surface; color: $ink; font-size: $body-text; }
+button, input, textarea, select { font: inherit; }
+button { min-height: $control-height; border-radius: $radius-small; cursor: pointer; }
+button:active { transform: scale(.98); transition: transform $motion-fast ease-out; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #8cc3ff; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; } }
