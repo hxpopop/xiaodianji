@@ -30,6 +30,28 @@ def _has_constraint(bind) -> bool:
 def upgrade() -> None:
     bind = op.get_bind()
     if not _has_constraint(bind):
+        bind.execute(
+            sa.text(
+                """
+                WITH ranked_reminders AS (
+                    SELECT
+                        id,
+                        row_number() OVER (
+                            PARTITION BY shop_id, customer_id, type
+                            ORDER BY
+                                CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END,
+                                created_at DESC,
+                                id DESC
+                        ) AS duplicate_rank
+                    FROM reminders
+                )
+                DELETE FROM reminders AS reminder
+                USING ranked_reminders AS ranked
+                WHERE reminder.id = ranked.id
+                  AND ranked.duplicate_rank > 1
+                """
+            )
+        )
         op.create_unique_constraint(
             CONSTRAINT_NAME,
             "reminders",
