@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from xiaodianji.api.confirmations import router as confirmations_router
 from xiaodianji.api.customers import router as customers_router
+from xiaodianji.api.evaluation import router as evaluation_router
 from xiaodianji.api.evidences import router as evidences_router
 from xiaodianji.api.ledger import router as ledger_router
 from xiaodianji.api.queries import router as queries_router
@@ -13,6 +14,7 @@ from xiaodianji.config import Settings
 from xiaodianji.customers.repository import SQLAlchemyCustomerRepository
 from xiaodianji.customers.service import CustomerService
 from xiaodianji.db import async_session_factory
+from xiaodianji.evaluation.runner import EvaluationRunner
 from xiaodianji.evidences.service import EvidenceService
 from xiaodianji.evidences.storage import Boto3ObjectStorage
 from xiaodianji.ledger.reader import ledger_reader_from
@@ -37,6 +39,7 @@ def create_app(
     record_workflow: Any | None = None,
     query_service: Any | None = None,
     reminder_service: Any | None = None,
+    evaluation_runner: Any | None = None,
     max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
 ) -> FastAPI:
     workflow = SQLAlchemyLedgerWorkflow(async_session_factory)
@@ -52,25 +55,19 @@ def create_app(
         evidence_service = EvidenceService(async_session_factory, storage)
     app = FastAPI(title="小店记 API", version="0.1.0")
     app.add_middleware(RequestBodyLimitMiddleware, max_body_size=max_request_body_bytes)
-    customer_backend = customer_service or CustomerService(
-        SQLAlchemyCustomerRepository(async_session_factory)
-    )
+    customer_backend = customer_service or CustomerService(SQLAlchemyCustomerRepository(async_session_factory))
     app.state.customer_service = customer_backend
     app.state.manual_record_service = manual_record_service or workflow
     app.state.confirmation_service = confirmation_service or workflow
     app.state.ledger_service = ledger_reader_from(ledger_backend)
     app.state.evidence_service = evidence_service
-    app.state.query_service = query_service or QueryService(
-        async_session_factory,
-        customer_backend,
-    )
-    app.state.reminder_service = reminder_service or ReminderService(
-        async_session_factory,
-        overdue_days=settings.overdue_days,
-    )
+    app.state.query_service = query_service or QueryService(async_session_factory, customer_backend)
+    app.state.reminder_service = reminder_service or ReminderService(async_session_factory, overdue_days=settings.overdue_days)
+    extraction_provider = extraction_provider_from(settings)
+    app.state.evaluation_runner = evaluation_runner or EvaluationRunner(async_session_factory, extraction_provider)
     app.state.record_workflow = record_workflow or RecordWorkflow(
         confirmation_workflow=workflow,
-        extraction_provider=extraction_provider_from(settings),
+        extraction_provider=extraction_provider,
         asr_provider=asr_provider_from(settings),
         evidence_service=evidence_service,
         customer_service=customer_backend,
@@ -82,6 +79,7 @@ def create_app(
     app.include_router(evidences_router)
     app.include_router(queries_router)
     app.include_router(reminders_router)
+    app.include_router(evaluation_router)
 
     @app.get("/api/v1/health")
     async def health() -> dict[str, str]:
