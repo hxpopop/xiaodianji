@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
+from typing import Awaitable, Callable
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -37,6 +39,15 @@ class SQLAlchemyLedgerWorkflow:
                 raise RuntimeError("idempotent confirmation could not be loaded")
             result = self._to_record(confirmation)
         return result
+
+    async def run_creation_once(self, shop_id: UUID, idempotency_key: str, create_candidate: Callable[[], Awaitable[ConfirmationRecord]]) -> ConfirmationRecord:
+        lock_key = int.from_bytes(sha256(f"{shop_id}:{idempotency_key}".encode()).digest()[:8], byteorder="big", signed=True)
+        async with self.session_factory.begin() as session:
+            await session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+            existing = await session.scalar(select(PendingConfirmation).where(PendingConfirmation.shop_id == shop_id, PendingConfirmation.idempotency_key == idempotency_key))
+            if existing is not None:
+                return self._to_record(existing)
+            return await create_candidate()
 
     async def get(self, confirmation_id: UUID) -> ConfirmationRecord:
         async with self.session_factory() as session:

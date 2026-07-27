@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import httpx
 
@@ -22,7 +22,12 @@ class OpenAICompatibleExtractionProvider:
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
             candidate = content if isinstance(content, dict) else json.loads(content)
-        except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            if not isinstance(candidate, dict):
+                raise ValueError("LLM response must contain a JSON object")
+            confidences = candidate.pop("field_confidences", {})
+            if not isinstance(confidences, dict):
+                raise ValueError("field confidences must be a JSON object")
+            normalized_confidences = {path: Decimal(str(value)) for path, value in confidences.items()}
+        except (httpx.HTTPError, AttributeError, InvalidOperation, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise ProviderUnavailable("LLM extraction provider failed") from error
-        confidences = candidate.pop("field_confidences", {})
-        return ExtractionResult(draft=candidate, field_confidences={path: Decimal(str(value)) for path, value in confidences.items()}, model_name=self.model)
+        return ExtractionResult(draft=candidate, field_confidences=normalized_confidences, model_name=self.model)

@@ -3,7 +3,8 @@ from uuid import uuid4
 from httpx import ASGITransport, AsyncClient
 
 from xiaodianji.main import create_app
-from xiaodianji.providers.base import ProviderUnavailable
+from xiaodianji.providers.base import ExtractionResult, ProviderUnavailable
+from xiaodianji.providers.fake import FakeExtractionProvider
 from xiaodianji.records.extraction import RecordWorkflow
 
 
@@ -15,6 +16,17 @@ class FailingExtractionProvider:
 class FailingASRProvider:
     async def transcribe(self, audio: bytes, mime_type: str):
         raise ProviderUnavailable("ASR is unavailable")
+
+
+class InvalidDraftExtractionProvider:
+    async def extract(self, text: str):
+        return ExtractionResult(draft={"target_type": "transaction"}, field_confidences={})
+
+
+class InvalidConfidenceExtractionProvider:
+    async def extract(self, text: str):
+        result = await FakeExtractionProvider().extract(text)
+        return ExtractionResult(draft=result.draft, field_confidences={"items.1.quantity": "invalid"})
 
 
 class NeverCreatesConfirmation:
@@ -38,12 +50,33 @@ class RetainedEvidenceService:
         raise AssertionError("a failed ASR call must not attach a transcript")
 
 
-async def test_provider_failure_returns_manual_fallback_without_record() -> None:
+async def post_text(client, extraction_provider):
     creator = NeverCreatesConfirmation()
-    app = create_app(record_workflow=RecordWorkflow(confirmation_workflow=creator, extraction_provider=FailingExtractionProvider(), asr_provider=FailingASRProvider()))
+    app = create_app(record_workflow=RecordWorkflow(confirmation_workflow=creator, extraction_provider=extraction_provider, asr_provider=FailingASRProvider()))
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/records/text", headers={"X-Shop-Id": str(uuid4()), "Idempotency-Key": "text-fail-001"}, json={"text": "王老板拿了一批插座"})
+    async with AsyncClient(transport=transport, base_url="http://test") as request_client:
+        response = await request_client.post("/api/v1/records/text", headers={"X-Shop-Id": str(uuid4()), "Idempotency-Key": "text-fail-001"}, json={"text": "王老板拿了一批插座"})
+    return response, creator
+
+
+async def test_provider_failure_returns_manual_fallback_without_record() -> None:
+    response, creator = await post_text(None, FailingExtractionProvider())
+
+    assert response.status_code == 503
+    assert response.json()["fallback"] == "manual_form"
+    assert creator.calls == 0
+
+
+async def test_invalid_extraction_draft_returns_manual_fallback_without_record() -> None:
+    response, creator = await post_text(None, InvalidDraftExtractionProvider())
+
+    assert response.status_code == 503
+    assert response.json()["fallback"] == "manual_form"
+    assert creator.calls == 0
+
+
+async def test_invalid_extraction_confidence_returns_manual_fallback_without_record() -> None:
+    response, creator = await post_text(None, InvalidConfidenceExtractionProvider())
 
     assert response.status_code == 503
     assert response.json()["fallback"] == "manual_form"

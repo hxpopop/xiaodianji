@@ -16,9 +16,11 @@ class HTTPASRProvider:
                 response = await client.post(self.url, headers=headers, data={"model": self.model}, files={"file": ("audio", audio, mime_type)})
                 response.raise_for_status()
                 payload = response.json()
-                transcript = payload.get("text") or payload.get("transcript")
+            if not isinstance(payload, dict):
+                raise ValueError("ASR response must be a JSON object")
+            transcript = payload.get("text") or payload.get("transcript")
             if not isinstance(transcript, str) or not transcript.strip():
                 raise ValueError("ASR response did not include a transcript")
-        except (httpx.HTTPError, ValueError) as error:
+        except (httpx.HTTPError, AttributeError, TypeError, ValueError) as error:
             raise ProviderUnavailable("ASR provider failed") from error
         return ASRResult(transcript=transcript.strip(), model_name=self.model)
