@@ -29,4 +29,3 @@ def test_duplicate_idempotency_finding_never_exposes_request_data() -> None:
     assert finding.type == "duplicate_idempotency"
     assert finding.message == "重复提交异常"
     assert finding.details == {}
-
