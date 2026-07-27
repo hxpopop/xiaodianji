@@ -15,22 +15,21 @@ describe('Task 11 round 4 page behavior', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps voice dominant and reports unavailable actions without misleading routes', async () => {
+  it('keeps voice dominant and routes the now-implemented voice and query actions', async () => {
     const wrapper = mount(HomePage)
     await flushPromises()
 
     expect(wrapper.get('h1').text()).toBe('小店记')
     expect(wrapper.get('[data-action="voice"]').text()).toContain('说一笔')
     await wrapper.get('[data-action="voice"]').trigger('click')
-    expect(wrapper.text()).toContain('语音记账即将开放')
-    expect(navigateTo).not.toHaveBeenCalled()
-
     await wrapper.get('[data-action="query"]').trigger('click')
-    expect(wrapper.text()).toContain('查欠款功能即将开放')
-    expect(navigateTo).not.toHaveBeenCalled()
+    expect(navigateTo.mock.calls).toEqual([
+      [{ url: '/pages/record-voice/index' }],
+      [{ url: '/pages/query/index' }],
+    ])
   })
 
-  it('keeps text, manual, and query actions visible while routing only implemented pages', async () => {
+  it('keeps text, manual, and query actions visible', async () => {
     const wrapper = mount(HomePage)
     await flushPromises()
 
@@ -39,7 +38,7 @@ describe('Task 11 round 4 page behavior', () => {
     expect(wrapper.get('[data-action="query"]').text()).toContain('查欠款')
     await wrapper.get('[data-action="text"]').trigger('click')
     await wrapper.get('[data-action="manual"]').trigger('click')
-    expect(navigateTo.mock.calls).toEqual([
+    expect(navigateTo.mock.calls.slice(-2)).toEqual([
       [{ url: '/pages/record-text/index' }],
       [{ url: '/pages/record-manual/index' }],
     ])

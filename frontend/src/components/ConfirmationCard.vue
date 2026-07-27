@@ -12,7 +12,7 @@ import LineItemEditor from './LineItemEditor.vue'
 
 type ItemRecordDraft = QuoteDraft | TransactionDraft
 type EvidenceState = 'loading' | 'ready' | 'missing' | 'unavailable'
-type ImageEvidenceOpen = { type: 'image'; url: string }
+type EvidenceOpen = { type: 'image'; url: string } | { type: 'text'; evidenceId: string }
 type LineItemConfidenceField = 'product' | 'spec' | 'quantity' | 'unit' | 'unit_price' | 'subtotal'
 
 const props = withDefaults(defineProps<{
@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'confirm', payload: { draft: RecordDraft; edited: boolean }): void
   (event: 'cancel'): void
-  (event: 'open-evidence', payload: ImageEvidenceOpen): void
+  (event: 'open-evidence', payload: EvidenceOpen): void
 }>()
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
@@ -105,6 +105,12 @@ function openImageEvidence() {
   const currentEvidence = props.evidence
   if (currentEvidence?.type !== 'image' || !currentEvidence.access_url) return
   emit('open-evidence', { type: 'image', url: currentEvidence.access_url })
+}
+
+function openTextEvidence() {
+  const currentEvidence = props.evidence
+  if (currentEvidence?.type !== 'text' || !currentEvidence.access_url) return
+  emit('open-evidence', { type: 'text', evidenceId: currentEvidence.id })
 }
 
 
@@ -298,6 +304,15 @@ function submit() {
           type="button"
           data-action="open-evidence"
           @click="openImageEvidence"
+        >
+          {{ evidenceActionLabel }}
+        </button>
+        <button
+          v-else-if="evidence.access_url && evidence.type === 'text'"
+          class="evidence-action"
+          type="button"
+          data-action="open-evidence"
+          @click="openTextEvidence"
         >
           {{ evidenceActionLabel }}
         </button>

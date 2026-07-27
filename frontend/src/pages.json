@@ -3,7 +3,18 @@
     { "path": "pages/index/index", "style": { "navigationBarTitleText": "小店记" } },
     { "path": "pages/record-text/index", "style": { "navigationBarTitleText": "文字记账" } },
     { "path": "pages/record-manual/index", "style": { "navigationBarTitleText": "手动输入" } },
-    { "path": "pages/confirmation/index", "style": { "navigationBarTitleText": "确认记账" } }
+    { "path": "pages/record-voice/index", "style": { "navigationBarTitleText": "语音记账" } },
+    { "path": "pages/confirmation/index", "style": { "navigationBarTitleText": "确认记账" } },
+    { "path": "pages/query/index", "style": { "navigationBarTitleText": "查账" } },
+    { "path": "pages/customers/index", "style": { "navigationBarTitleText": "客户" } },
+    { "path": "pages/customer-detail/index", "style": { "navigationBarTitleText": "客户账目" } },
+    { "path": "pages/evidence/index", "style": { "navigationBarTitleText": "原始凭证" } },
+    { "path": "pages/reminders/index", "style": { "navigationBarTitleText": "逾期提醒" } },
+    { "path": "pages/evaluation/index", "style": { "navigationBarTitleText": "识别评测" } }
   ],
-  "globalStyle": { "navigationBarTextStyle": "black", "navigationBarBackgroundColor": "#FFFFFF", "backgroundColor": "#FFFFFF" }
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#FFFFFF"
+  }
 }

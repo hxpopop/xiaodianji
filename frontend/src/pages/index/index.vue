@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { apiClient } from '../../api/client'
+import BottomNavigation from '../../components/BottomNavigation.vue'
 import { recordStore } from '../../stores/record'
 
 const overdue = ref(0)
 const reminderText = ref('正在查看逾期提醒…')
-const unavailableNotice = ref('')
 
 onMounted(async () => {
   try {
@@ -22,10 +22,6 @@ onMounted(async () => {
 function go(path: string) {
   uni.navigateTo({ url: path })
 }
-
-function showUnavailable(message: string) {
-  unavailableNotice.value = message
-}
 </script>
 
 <template>
@@ -39,10 +35,10 @@ function showUnavailable(message: string) {
       class="voice-action"
       type="button"
       data-action="voice"
-      @click="showUnavailable('语音记账即将开放，请先选择文字记账或手动输入。')"
+      @click="go('/pages/record-voice/index')"
     >
       <strong>说一笔</strong>
-      <span>语音记账即将开放</span>
+      <span>语音生成确认单</span>
     </button>
 
     <section class="actions" aria-label="记账与查账方式">
@@ -56,25 +52,23 @@ function showUnavailable(message: string) {
         class="query-action"
         type="button"
         data-action="query"
-        @click="showUnavailable('查欠款功能即将开放，请先查看下方逾期提醒。')"
+        @click="go('/pages/query/index')"
       >
         <span>查欠款</span>
-        <small>即将开放</small>
+        <small>结论与凭证</small>
       </button>
     </section>
 
-    <p v-if="unavailableNotice" class="unavailable-notice" role="status">
-      {{ unavailableNotice }}
-    </p>
-
-    <section class="reminder" aria-live="polite">
-      <div>
-        <h2>逾期提醒</h2>
-        <p>{{ reminderText }}</p>
-      </div>
-      <strong v-if="overdue">{{ overdue }} 位待跟进</strong>
-    </section>
+    <button class="reminder" type="button" @click="go('/pages/reminders/index')">
+      <span>
+        <strong>逾期提醒</strong>
+        <small>{{ reminderText }}</small>
+      </span>
+      <b v-if="overdue">{{ overdue }} 位</b>
+      <b v-else>查看</b>
+    </button>
   </main>
+  <BottomNavigation active="record" />
 </template>
 
 <style scoped lang="scss">
@@ -83,7 +77,7 @@ function showUnavailable(message: string) {
 .home {
   max-width: 42rem;
   margin: auto;
-  padding: $space-3 $space-3 calc($space-4 + env(safe-area-inset-bottom));
+  padding: $space-3 $space-3 calc(5.5rem + env(safe-area-inset-bottom));
 }
 
 header {
@@ -155,37 +149,32 @@ header p {
   font-weight: 600;
 }
 
-.unavailable-notice {
-  margin: 0 0 $space-3;
-  padding: $space-2;
-  border-left: 3px solid $primary;
-  color: $muted;
-}
-
 .reminder {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  min-height: 4.5rem;
   gap: $space-3;
-  padding: $space-3 0;
+  padding: $space-2 0;
+  border: 0;
   border-top: 1px solid $line;
+  border-bottom: 1px solid $line;
+  border-radius: 0;
+  background: $surface;
+  color: $ink;
+  text-align: left;
 }
 
-.reminder h2,
-.reminder p {
-  margin: 0;
+.reminder > span {
+  display: grid;
 }
 
-.reminder h2 {
-  font-size: 1.25rem;
-}
-
-.reminder p {
-  margin-top: .25rem;
+.reminder small {
   color: $muted;
 }
 
-.reminder strong {
+.reminder b {
   flex: none;
   color: $amber;
 }

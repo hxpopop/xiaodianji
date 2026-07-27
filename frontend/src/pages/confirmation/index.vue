@@ -6,7 +6,7 @@ import ConfirmationCard from '../../components/ConfirmationCard.vue'
 import { recordStore } from '../../stores/record'
 
 type EvidenceState = 'loading' | 'ready' | 'missing' | 'unavailable'
-type ImageEvidenceOpen = { type: 'image'; url: string }
+type EvidenceOpen = { type: 'image'; url: string } | { type: 'text'; evidenceId: string }
 
 const threshold = Number(import.meta.env.VITE_CONFIDENCE_THRESHOLD || .75)
 const evidence = ref<EvidenceRead | null>(null)
@@ -40,11 +40,15 @@ watch(
 )
 
 
-function openEvidence(payload: ImageEvidenceOpen) {
-  uni.previewImage({
-    current: payload.url,
-    urls: [payload.url],
-  })
+function openEvidence(payload: EvidenceOpen) {
+  if (payload.type === 'image') {
+    uni.previewImage({
+      current: payload.url,
+      urls: [payload.url],
+    })
+    return
+  }
+  uni.navigateTo({ url: `/pages/evidence/index?id=${encodeURIComponent(payload.evidenceId)}` })
 }
 async function confirm(payload: { draft: RecordDraft; edited: boolean }) {
   try {
