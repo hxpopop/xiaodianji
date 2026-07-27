@@ -27,8 +27,20 @@ class EvaluationRunner:
 
     async def run(self, shop_id: UUID, model_name: str) -> EvaluationRunRead:
         async with self.session_factory.begin() as session:
-            await self._import_cases(session, shop_id)
-            cases = list((await session.scalars(select(EvaluationCase).where(EvaluationCase.shop_id == shop_id).order_by(EvaluationCase.stable_key))).all())
+            payloads = self._case_payloads()
+            await self._import_cases(session, shop_id, payloads)
+            stable_keys = [payload["stable_key"] for payload in payloads]
+            if stable_keys:
+                cases = list(
+                    (await session.scalars(
+                        select(EvaluationCase).where(
+                            EvaluationCase.shop_id == shop_id,
+                            EvaluationCase.stable_key.in_(stable_keys),
+                        ).order_by(EvaluationCase.stable_key)
+                    )).all()
+                )
+            else:
+                cases = []
             run = EvaluationRun(shop_id=shop_id, model_name=model_name, started_at=datetime.now(timezone.utc))
             session.add(run)
             await session.flush()
@@ -63,8 +75,8 @@ class EvaluationRunner:
                 return None
             return await self._read(session, run, EvaluationMetrics.model_validate(run.summary_json["metrics"]), ConfirmationRates.model_validate(run.summary_json["confirmation_rates"]))
 
-    async def _import_cases(self, session, shop_id: UUID) -> None:
-        for payload in self._case_payloads():
+    async def _import_cases(self, session, shop_id: UUID, payloads: list[dict[str, Any]]) -> None:
+        for payload in payloads:
             existing = await session.scalar(select(EvaluationCase).where(EvaluationCase.shop_id == shop_id, EvaluationCase.stable_key == payload["stable_key"]))
             if existing is None:
                 session.add(EvaluationCase(shop_id=shop_id, stable_key=payload["stable_key"], input_type=payload["input_type"], input_payload=payload["input"], expected_json=payload["expected"], tags=payload["tags"]))

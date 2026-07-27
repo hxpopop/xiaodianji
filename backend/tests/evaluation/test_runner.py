@@ -93,3 +93,42 @@ async def test_runner_import_is_idempotent_and_get_is_shop_isolated(database) ->
         assert await session.scalar(select(func.count()).select_from(EvaluationCase)) == 1
     assert await runner.get(shop_id, first.id) is not None
     assert await runner.get(other_shop_id, first.id) is None
+
+async def test_runner_scores_only_the_current_fixed_case_keys(database) -> None:
+    factory, shop_id, _ = database
+    async with factory.begin() as session:
+        session.add(EvaluationCase(
+            shop_id=shop_id,
+            stable_key="retired-fixed-case",
+            input_type="text",
+            input_payload={"text": "旧样本"},
+            expected_json=valid_transaction(),
+            tags=["retired"],
+        ))
+    runner = EvaluationRunner(factory, ControlledPredictor({"当前样本": valid_transaction()}), cases=[
+        {"stable_key": "current-fixed-case", "input_type": "text", "input": {"text": "当前样本"}, "expected": valid_transaction(), "tags": ["single_product"]},
+    ])
+
+    run = await runner.run(shop_id, "controlled-v1")
+
+    assert run.case_count == 1
+    assert [result.stable_key for result in run.results] == ["current-fixed-case"]
+
+
+async def test_runner_handles_an_empty_current_fixed_case_set(database) -> None:
+    factory, shop_id, _ = database
+    async with factory.begin() as session:
+        session.add(EvaluationCase(
+            shop_id=shop_id,
+            stable_key="retired-fixed-case",
+            input_type="text",
+            input_payload={"text": "旧样本"},
+            expected_json=valid_transaction(),
+            tags=["retired"],
+        ))
+    runner = EvaluationRunner(factory, ControlledPredictor({}), cases=[])
+
+    run = await runner.run(shop_id, "controlled-v1")
+
+    assert run.case_count == 0
+    assert run.results == []

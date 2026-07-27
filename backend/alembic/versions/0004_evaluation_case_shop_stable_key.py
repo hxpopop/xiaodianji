@@ -46,5 +46,11 @@ def downgrade() -> None:
     bind = op.get_bind()
     for name in _constraint_names(bind, ["shop_id", "stable_key"]):
         op.drop_constraint(name, TABLE, type_="unique")
+    bind.execute(
+        sa.text(
+            "UPDATE evaluation_cases "
+            "SET stable_key = 'legacy-' || id::text"
+        )
+    )
     if not _constraint_names(bind, ["stable_key"]):
         op.create_unique_constraint(None, TABLE, ["stable_key"])
