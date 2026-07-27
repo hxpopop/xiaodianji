@@ -1,54 +1,9 @@
-import type { ConfirmationRead, RecordDraft, ReminderSummary } from './types'
-
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
-
-function requestId() {
-  return globalThis.crypto?.randomUUID?.() || `xdj-${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: { Accept: 'application/json', ...init.headers },
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => null)
-    const detail = typeof body?.detail === 'string' ? body.detail : ''
-    throw new Error(detail || '服务暂时不可用，请稍后重试或改用手动输入。')
-  }
-  return response.json() as Promise<T>
-}
-
-function shopHeaders(shopId: string, idempotencyKey = requestId()) {
-  return { 'X-Shop-Id': shopId, 'Idempotency-Key': idempotencyKey }
-}
-
-export const apiClient = {
-  createTextDraft(shopId: string, text: string, idempotencyKey = requestId()) {
-    return request<ConfirmationRead>('/records/text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...shopHeaders(shopId, idempotencyKey) },
-      body: JSON.stringify({ text }),
-    })
-  },
-  createManualDraft(shopId: string, draft: RecordDraft, idempotencyKey = requestId()) {
-    return request<ConfirmationRead>('/records/manual', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...shopHeaders(shopId, idempotencyKey) },
-      body: JSON.stringify(draft),
-    })
-  },
-  getConfirmation(id: string) { return request<ConfirmationRead>(`/confirmations/${id}`) },
-  updateConfirmation(id: string, draft: RecordDraft) {
-    return request<ConfirmationRead>(`/confirmations/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft),
-    })
-  },
-  confirmConfirmation(id: string, idempotencyKey = requestId()) {
-    return request<ConfirmationRead>(`/confirmations/${id}/confirm`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey } })
-  },
-  cancelConfirmation(id: string, idempotencyKey = requestId()) {
-    return request<ConfirmationRead>(`/confirmations/${id}/cancel`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey } })
-  },
-  getReminders(shopId: string) { return request<ReminderSummary>('/reminders', { headers: { 'X-Shop-Id': shopId } }) },
-}
+import type { ConfirmationRead, EvidenceRead, RecordDraft, ReminderSummary } from './types'
+const baseUrl=(import.meta.env.VITE_API_BASE_URL||'/api/v1').replace(/\/$/,'')
+const mapError=(detail:string)=>detail.includes('AI service')?'智能识别暂时不可用，请改用手动输入。':detail.includes('not found')?'记录不存在或已失效，请返回重新输入。':detail.includes('conflict')?'这笔记录已处理，请刷新后查看。':'服务暂时不可用，请稍后重试或改用手动输入。'
+const requestId=()=>globalThis.crypto?.randomUUID?.()||`xdj-${Date.now()}`
+const num=(v:unknown)=>typeof v==='string'?Number(v):typeof v==='number'?v:0
+export function normalizeConfirmation(raw:any):ConfirmationRead{const d=raw.effective_json;const items=Array.isArray(d.items)?d.items.map((x:any)=>({...x,quantity:num(x.quantity),unit_price:num(x.unit_price),subtotal:num(x.subtotal)})):undefined;return {...raw,effective_json:items?{...d,items,total_amount:num(d.total_amount)}:d.target_type==='payment'?{...d,amount:num(d.amount)}:d}}
+async function request<T>(p:string,init:RequestInit={}):Promise<T>{const r=await fetch(`${baseUrl}${p}`,{...init,headers:{Accept:'application/json',...init.headers}});if(!r.ok){const b=await r.json().catch(()=>null);throw new Error(mapError(typeof b?.detail==='string'?b.detail:''))}return r.json() as Promise<T>}
+function shop(s:string,key=requestId()){if(!s)throw new Error('尚未配置商户，请联系管理员设置商户信息后再记账。');return{'X-Shop-Id':s,'Idempotency-Key':key}}
+export const apiClient={createTextDraft:(s:string,text:string,k=requestId())=>request<any>('/records/text',{method:'POST',headers:{'Content-Type':'application/json',...shop(s,k)},body:JSON.stringify({text})}).then(normalizeConfirmation),createManualDraft:(s:string,d:RecordDraft,k=requestId())=>request<any>('/records/manual',{method:'POST',headers:{'Content-Type':'application/json',...shop(s,k)},body:JSON.stringify(d)}).then(normalizeConfirmation),updateConfirmation:(recordId:string,d:RecordDraft)=>request<any>(`/confirmations/${recordId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(normalizeConfirmation),confirmConfirmation:(recordId:string,k=requestId())=>request<any>(`/confirmations/${recordId}/confirm`,{method:'POST',headers:{'Idempotency-Key':k}}).then(normalizeConfirmation),cancelConfirmation:(recordId:string,k=requestId())=>request<any>(`/confirmations/${recordId}/cancel`,{method:'POST',headers:{'Idempotency-Key':k}}).then(normalizeConfirmation),getEvidence:(s:string,evidenceId:string)=>request<EvidenceRead>(`/evidences/${evidenceId}`,{headers:{'X-Shop-Id':shop(s)['X-Shop-Id']}}),getReminders:(s:string)=>request<ReminderSummary>('/reminders',{headers:{'X-Shop-Id':shop(s)['X-Shop-Id']}})}
