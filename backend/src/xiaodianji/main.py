@@ -8,6 +8,7 @@ from xiaodianji.api.evidences import router as evidences_router
 from xiaodianji.api.ledger import router as ledger_router
 from xiaodianji.api.queries import router as queries_router
 from xiaodianji.api.records import router as records_router
+from xiaodianji.api.reminders import router as reminders_router
 from xiaodianji.config import Settings
 from xiaodianji.customers.repository import SQLAlchemyCustomerRepository
 from xiaodianji.customers.service import CustomerService
@@ -20,6 +21,7 @@ from xiaodianji.middleware import RequestBodyLimitMiddleware
 from xiaodianji.providers.factory import asr_provider_from, extraction_provider_from
 from xiaodianji.queries.service import QueryService
 from xiaodianji.records.extraction import RecordWorkflow
+from xiaodianji.reminders.service import ReminderService
 
 
 DEFAULT_MAX_REQUEST_BODY_BYTES = 21 * 1024 * 1024
@@ -34,6 +36,7 @@ def create_app(
     evidence_service: Any | None = None,
     record_workflow: Any | None = None,
     query_service: Any | None = None,
+    reminder_service: Any | None = None,
     max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
 ) -> FastAPI:
     workflow = SQLAlchemyLedgerWorkflow(async_session_factory)
@@ -61,6 +64,10 @@ def create_app(
         async_session_factory,
         customer_backend,
     )
+    app.state.reminder_service = reminder_service or ReminderService(
+        async_session_factory,
+        overdue_days=settings.overdue_days,
+    )
     app.state.record_workflow = record_workflow or RecordWorkflow(
         confirmation_workflow=workflow,
         extraction_provider=extraction_provider_from(settings),
@@ -74,6 +81,7 @@ def create_app(
     app.include_router(ledger_router)
     app.include_router(evidences_router)
     app.include_router(queries_router)
+    app.include_router(reminders_router)
 
     @app.get("/api/v1/health")
     async def health() -> dict[str, str]:

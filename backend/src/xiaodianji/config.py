@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     object_storage_secret_key: str = "minioadmin"
     object_storage_bucket: str = "evidences"
     confidence_threshold: Decimal = Field(default=Decimal("0.75"), ge=Decimal("0"), le=Decimal("1"))
+    overdue_days: int = Field(default=30, gt=0)
     timezone: str = "Asia/Shanghai"
     llm_provider: str = "fake"
     llm_url: str = ""
