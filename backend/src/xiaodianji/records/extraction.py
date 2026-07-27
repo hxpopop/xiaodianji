@@ -96,6 +96,10 @@ class RecordWorkflow:
                 await asyncio.sleep(0.01)
                 continue
             try:
+                async with factory() as session:
+                    existing = await session.scalar(select(PendingConfirmation).where(PendingConfirmation.shop_id == shop_id, PendingConfirmation.idempotency_key == idempotency_key))
+                if existing is not None:
+                    return self.confirmation_workflow._to_record(existing)
                 return await self._run_candidate_with_renewal(
                     shop_id,
                     idempotency_key,
